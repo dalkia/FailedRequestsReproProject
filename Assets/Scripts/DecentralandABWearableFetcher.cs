@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using UnityEngine;
@@ -10,8 +11,10 @@ using Newtonsoft.Json;
 
 public class DecentralandABWearableFetcher : MonoBehaviour
 {
-    private const string baseUrl = "https://peer.decentraland.org/content/contents/";
-    private const string initialUrl = "https://peer.decentraland.org/content/contents/bafybeihdtxww224vlx7trjy4hj74aoqskdvbuajeuvlhlmbopz5hfdqaua";
+    private const string oldReferenceSnapshotContentURL = "https://peer.decentraland.org/content/contents/bafybeihdtxww224vlx7trjy4hj74aoqskdvbuajeuvlhlmbopz5hfdqaua";
+
+    private const string snapshotURL = "https://peer.decentraland.org/content/snapshots";
+    private const string contentsURL = "https://peer.decentraland.org/content/contents/";
     private const string manifestUrlTemplate = "https://ab-cdn.decentraland.org/manifest/{0}_mac.json";
     private const string assetBundleUrlTemplate = "https://ab-cdn.decentraland.org/{0}/{1}";
     private const string cacheFilePath = "AssetBundleCache.json"; // Path to save the cache file
@@ -43,7 +46,9 @@ public class DecentralandABWearableFetcher : MonoBehaviour
     {
         try
         {
-            string catalystContent = await GetRequestAsync(initialUrl);
+            string catalystSnapshotURL = await GetHashWithMostEntitiesAsync();
+            
+            string catalystContent = await GetRequestAsync(catalystSnapshotURL);
 
             if (!string.IsNullOrEmpty(catalystContent))
             {
@@ -68,13 +73,47 @@ public class DecentralandABWearableFetcher : MonoBehaviour
             Debug.LogError($"Error: {ex.Message}");
         }
     }
+    
+    public async UniTask<string> GetHashWithMostEntitiesAsync()
+    {
+        // Assuming you're getting a list of hashes and their corresponding entity counts from a URL
+        string jsonResponse = await GetRequestAsync(snapshotURL);
+        
+        List<SnapshotData> snapshots = JsonConvert.DeserializeObject<List<SnapshotData>>(jsonResponse);
+
+        if (snapshots == null || snapshots.Count == 0)
+        {
+            Debug.LogError("No entity data available");
+            return null;
+        }
+        
+
+        
+        foreach (var snapshotData in snapshots)
+        {
+            if (snapshotData.numberOfEntities > 19000 && snapshotData.numberOfEntities < 22000)
+            {
+                return $"{contentsURL}{snapshotData.hash}";
+            }
+        }
+        
+        var snapshotWithMostEntities = snapshots
+            .OrderByDescending(snapshot => snapshot.numberOfEntities)
+            .First();
+
+        //Just in case the number of entities drastically change during the test, lets have a fallback
+        return $"{contentsURL}{snapshotWithMostEntities.hash}";
+
+
+    }
+
 
     private async UniTask FetchEntityDataAsync(string entityId)
     {
         if (ct.IsCancellationRequested)
             return;
         
-        string entityUrl = baseUrl + entityId;
+        string entityUrl = contentsURL + entityId;
 
         string entityData = await GetRequestAsync(entityUrl);
 
@@ -227,5 +266,12 @@ public class DecentralandABWearableFetcher : MonoBehaviour
     {
         public string version;
         public List<string> files;
+    }
+    
+    [Serializable]
+    public class SnapshotData
+    {
+        public string hash;
+        public int numberOfEntities;
     }
 }

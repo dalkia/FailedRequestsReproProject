@@ -16,7 +16,7 @@ public class AssetBundleDownloader : MonoBehaviour
     
     private const int concurrentDownloads = 20; // Z limit
     private const int downloadBatchPNG = 10; // X amount of PNG requests
-    private const int downloadBatchAB = 1000; // Y amount of AB requests before PNG
+    private const int downloadBatchAB = 800; // Y amount of AB requests before PNG
 
     private SemaphoreSlim downloadSemaphore = new(concurrentDownloads);
 
