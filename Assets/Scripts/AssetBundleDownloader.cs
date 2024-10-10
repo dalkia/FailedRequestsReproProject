@@ -16,7 +16,7 @@ public class AssetBundleDownloader : MonoBehaviour
     
     private const int concurrentDownloads = 20; // Z limit
     private const int downloadBatchPNG = 10; // X amount of PNG requests
-    private const int downloadBatchAB = 800; // Y amount of AB requests before PNG
+    private const int downloadBatchAB = 1000; // Y amount of AB requests before PNG
 
     private SemaphoreSlim downloadSemaphore = new(concurrentDownloads);
 
@@ -42,6 +42,25 @@ public class AssetBundleDownloader : MonoBehaviour
         List<UniTask> abRequests = new List<UniTask>();
         int abCounter = 0;
 
+        int stopCounter = 0;
+        foreach (var keyValuePair in assetBundleCache)
+        {
+            abRequests.Add(DownloadAssetBundle(Hash128.Parse(keyValuePair.Key), keyValuePair.Value));
+            abCounter++;
+            if (abCounter >= downloadBatchAB)
+            {
+                await UniTask.WhenAll(abRequests);
+                abRequests.Clear();
+                await ProcessPngRequests(downloadBatchPNG);
+                abCounter = 0;
+            }
+
+            stopCounter++;
+            if (stopCounter > 1500)
+                break;
+        }
+
+        /*
         foreach (var (hash, url) in assetBundleCache)
         {
             abRequests.Add(DownloadAssetBundle(Hash128.Parse(hash), url));
@@ -54,6 +73,7 @@ public class AssetBundleDownloader : MonoBehaviour
                 abCounter = 0;
             }
         }
+        */
         
         if (abRequests.Count > 0)
         {
